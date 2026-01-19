@@ -1,0 +1,120 @@
+# Prometheus Alerting Rules
+
+groups:
+  - name: api_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.instance }}"
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "P95 latency is {{ $value }}s for {{ $labels.instance }}"
+
+      - alert: APIDown
+        expr: up{job="api-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API service is down"
+          description: "{{ $labels.instance }} has been down for more than 2 minutes"
+
+  - name: kafka_alerts
+    interval: 30s
+    rules:
+      - alert: HighConsumerLag
+        expr: kafka_consumer_lag > 10000
+        for: 10m
+        labels:
+          severity: warning
+          component: kafka
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Consumer lag for {{ $labels.consumer_group }} on {{ $labels.topic }} is {{ $value }}"
+
+      - alert: CriticalConsumerLag
+        expr: kafka_consumer_lag > 50000
+        for: 5m
+        labels:
+          severity: critical
+          component: kafka
+        annotations:
+          summary: "Critical Kafka consumer lag"
+          description: "Consumer lag for {{ $labels.consumer_group }} on {{ $labels.topic }} is {{ $value }}"
+
+  - name: pod_alerts
+    interval: 30s
+    rules:
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod is crash looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping"
+
+      - alert: PodMemoryPressure
+        expr: |
+          container_memory_usage_bytes{container!=""} / container_spec_memory_limit_bytes{container!=""} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod memory pressure"
+          description: "Pod {{ $labels.pod }} is using {{ $value | humanizePercentage }} of memory limit"
+
+      - alert: PodCPUThrottling
+        expr: |
+          rate(container_cpu_cfs_throttled_seconds_total[5m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: kubernetes
+        annotations:
+          summary: "Pod CPU throttling"
+          description: "Pod {{ $labels.pod }} is being CPU throttled"
+
+  - name: node_alerts
+    interval: 30s
+    rules:
+      - alert: NodeDiskPressure
+        expr: |
+          (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"}) < 0.15
+        for: 10m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Node disk pressure"
+          description: "Node {{ $labels.instance }} has less than 15% disk space available"
+
+      - alert: NodeMemoryPressure
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Node memory pressure"
+          description: "Node {{ $labels.instance }} has less than 10% memory available"

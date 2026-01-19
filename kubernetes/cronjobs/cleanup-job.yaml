@@ -1,0 +1,44 @@
+---
+# CronJob for Database Cleanup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-cleanup
+  namespace: production
+spec:
+  schedule: "0 2 * * *"  # 2 AM daily
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          serviceAccountName: db-cleanup-sa
+          restartPolicy: OnFailure
+          containers:
+          - name: cleanup
+            image: hyperscale/db-cleanup:latest
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: database-credentials
+                  key: connection-string
+            - name: RETENTION_DAYS
+              value: "30"
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
+---
+# Service Account for CronJob
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: db-cleanup-sa
+  namespace: production

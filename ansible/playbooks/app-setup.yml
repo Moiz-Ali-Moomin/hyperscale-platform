@@ -1,0 +1,50 @@
+---
+# Application setup playbook
+
+- name: Configure and deploy application
+  hosts: all
+  become: yes
+  
+  vars:
+    app_name: hyperscale-api
+    app_user: appuser
+    app_dir: /opt/{{ app_name }}
+    
+  roles:
+    - common
+    
+  tasks:
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: '0755'
+        
+    - name: Install application dependencies
+      pip:
+        requirements: "{{ app_dir }}/requirements.txt"
+        executable: pip3
+      when: requirements_file.stat.exists
+      
+    - name: Configure systemd service
+      template:
+        src: templates/app.service.j2
+        dest: /etc/systemd/system/{{ app_name }}.service
+        owner: root
+        group: root
+        mode: '0644'
+      notify: reload systemd
+      
+    - name: Enable and start application service
+      systemd:
+        name: "{{ app_name }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+        
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes

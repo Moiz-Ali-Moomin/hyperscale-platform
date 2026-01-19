@@ -1,0 +1,26 @@
+# Kafka Topic Configuration for User Events
+
+topic_name: user-events
+partitions: 12
+replication_factor: 3
+config:
+  # Retention settings
+  retention.ms: 604800000  # 7 days
+  retention.bytes: 1073741824  # 1GB per partition
+  
+  # Performance tuning
+  segment.bytes: 536870912  # 512MB
+  segment.ms: 86400000  # 1 day
+  
+  # Reliability
+  min.insync.replicas: 2
+  unclean.leader.election.enable: false
+  
+  # Compression
+  compression.type: lz4
+  
+  # Cleanup
+  cleanup.policy: delete
+  
+  # Message size
+  max.message.bytes: 1048576  # 1MB

@@ -1,0 +1,122 @@
+---
+# Kafka Consumer Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer-service
+  namespace: production
+  labels:
+    app: consumer-service
+    version: v1
+spec:
+  replicas: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: consumer-service
+  template:
+    metadata:
+      labels:
+        app: consumer-service
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: consumer-service-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      
+      # Node affinity for high-memory nodes
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: workload
+                operator: In
+                values:
+                - kafka-consumer
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - consumer-service
+              topologyKey: topology.kubernetes.io/zone
+      
+      # Tolerate the high-memory node taints
+      tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "kafka-consumer"
+        effect: "NoSchedule"
+      
+      containers:
+      - name: consumer
+        image: hyperscale/consumer-service:latest
+        imagePullPolicy: Always
+        
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: kafka-config
+              key: bootstrap-servers
+        - name: KAFKA_GROUP_ID
+          value: "hyperscale-consumer-group"
+        - name: KAFKA_TOPIC
+          value: "user-events"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-credentials
+              key: connection-string
+        - name: MAX_POLL_RECORDS
+          value: "500"
+        - name: SESSION_TIMEOUT_MS
+          value: "30000"
+        
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+# Service Account for Consumer
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: consumer-service-sa
+  namespace: production
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/hyperscale-pod-cloudwatch-logs

@@ -1,0 +1,4 @@
+.dockerignore
+docker/api-service/requirements.txt
+docker/consumer-service/requirements.txt
+terraform/alb-ingress/main.tf

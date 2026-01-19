@@ -1,0 +1,101 @@
+---
+# Network Policy for API Service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: api-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from Ingress Controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 8000
+  # Allow from monitoring (Prometheus)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow database access
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 3306
+  # Allow Redis access
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow Kafka access
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 9092
+  # Allow HTTPS to external services
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+---
+# Network Policy for Consumer Service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: consumer-network-policy
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app: consumer-service
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow Kafka access
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 9092
+  # Allow database access
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 3306

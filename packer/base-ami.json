@@ -1,0 +1,79 @@
+{
+    "variables": {
+        "aws_region": "us-east-1",
+        "project_name": "hyperscale",
+        "base_ami": "ami-0c55b159cbfafe1f0",
+        "instance_type": "t3.medium",
+        "ssh_username": "ubuntu"
+    },
+    "builders": [
+        {
+            "type": "amazon-ebs",
+            "region": "{{user `aws_region`}}",
+            "source_ami": "{{user `base_ami`}}",
+            "instance_type": "{{user `instance_type`}}",
+            "ssh_username": "{{user `ssh_username`}}",
+            "ami_name": "{{user `project_name`}}-base-{{timestamp}}",
+            "ami_description": "Base AMI for HyperScale Platform",
+            "tags": {
+                "Project": "HyperScale",
+                "Environment": "production",
+                "ManagedBy": "Packer"
+            },
+            "run_tags": {
+                "Name": "Packer-Builder-{{user `project_name`}}"
+            }
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "shell",
+            "inline": [
+                "echo 'Waiting for cloud-init to complete...'",
+                "cloud-init status --wait",
+                "sudo apt-get update",
+                "sudo apt-get upgrade -y"
+            ]
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "echo 'Installing base packages...'",
+                "sudo apt-get install -y curl wget git vim htop net-tools",
+                "sudo apt-get install -y python3 python3-pip",
+                "sudo apt-get install -y docker.io",
+                "sudo systemctl enable docker",
+                "sudo systemctl start docker",
+                "sudo usermod -aG docker ubuntu"
+            ]
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "echo 'Installing monitoring agents...'",
+                "wget -O /tmp/cloudwatch-agent.deb https://s3.amazonaws.com/amazoncloudwatch-agent/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb",
+                "sudo dpkg -i /tmp/cloudwatch-agent.deb",
+                "rm /tmp/cloudwatch-agent.deb"
+            ]
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "echo 'Security hardening...'",
+                "sudo systemctl disable ssh",
+                "sudo sed -i 's/PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config",
+                "sudo sed-i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config"
+            ]
+        },
+        {
+            "type": "shell",
+            "inline": [
+                "echo 'Cleanup...'",
+                "sudo apt-get autoremove -y",
+                "sudo apt-get clean",
+                "rm -rf /tmp/*",
+                "history -c"
+            ]
+        }
+    ]
+}

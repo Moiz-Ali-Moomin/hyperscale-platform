@@ -1,0 +1,144 @@
+// Jenkins Pipeline for HyperScale Platform
+// Multi-stage CI/CD pipeline
+
+pipeline {
+    agent any
+    
+    environment {
+        AWS_REGION = 'us-east-1'
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE_NAME = 'hyperscale/api-service'
+        EKS_CLUSTER = 'hyperscale-eks'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    env.GIT_COMMIT_SHORT = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                    env.IMAGE_TAG = "${env.GIT_COMMIT_SHORT}-${env.BUILD_NUMBER}"
+                }
+            }
+        }
+        
+        stage('Code Quality') {
+            parallel {
+                stage('Lint') {
+                    steps {
+                        sh 'pylint --rcfile=.pylintrc **/*.py || true'
+                    }
+                }
+                
+                stage('Security Scan') {
+                    steps {
+                        sh 'bandit -r . -f json -o bandit-report.json || true'
+                    }
+                }
+            }
+        }
+        
+        stage('Unit Tests') {
+            steps {
+                sh 'pytest tests/ --cov=. --cov-report=xml --junitxml=test-results.xml'
+            }
+            post {
+                always {
+                    junit 'test-results.xml'
+                    publishCoverage adapters: [coberturaAdapter('coverage.xml')]
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    sh """
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                        -t ${IMAGE_NAME}:latest \
+                        -f docker/api-service/Dockerfile .
+                    """
+                }
+            }
+        }
+        
+        stage('Container Security Scan') {
+            steps {
+                sh """
+                    trivy image --severity HIGH,CRITICAL \
+                    --format json --output trivy-report.json \
+                    ${IMAGE_NAME}:${IMAGE_TAG}
+                """
+            }
+        }
+        
+        stage('Push to ECR') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh """
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker tag ${IMAGE_NAME}:latest ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+                        
+                        docker push ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${ECR_REGISTRY}/${IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+        
+        stage('Deploy to EKS') {
+            when {
+                branch 'main'
+            }
+            steps {
+                script {
+                    sh """
+                        aws eks update-kubeconfig --name ${EKS_CLUSTER} --region ${AWS_REGION}
+                        
+                        kubectl set image deployment/api-service \
+                        api=${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                        -n production
+                        
+                        kubectl rollout status deployment/api-service -n production --timeout=5m
+                    """
+                }
+            }
+        }
+        
+        stage('Integration Tests') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh 'pytest tests/integration/ --env=staging'
+            }
+        }
+    }
+    
+    post {
+        success {
+            slackSend(
+                color: 'good',
+                message: "Build ${env.BUILD_NUMBER} succeeded - ${env.JOB_NAME}"
+            )
+        }
+        failure {
+            slackSend(
+                color: 'danger',
+                message: "Build ${env.BUILD_NUMBER} failed - ${env.JOB_NAME}"
+            )
+        }
+        always {
+            cleanWs()
+        }
+    }
+}

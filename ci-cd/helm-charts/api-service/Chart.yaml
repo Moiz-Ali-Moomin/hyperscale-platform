@@ -1,0 +1,15 @@
+apiVersion: v2
+name: api-service
+description: Helm chart for HyperScale API Service
+type: application
+version: 1.0.0
+appVersion: "1.0"
+
+keywords:
+  - hyperscale
+  - api
+  - kubernetes
+
+maintainers:
+  - name: DevOps Team
+    email: devops@hyperscale.com

@@ -1,0 +1,39 @@
+---
+# Application Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: production
+data:
+  # Application settings
+  APP_NAME: "hyperscale-platform"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  
+  # Feature flags
+  FEATURE_ASYNC_PROCESSING: "true"
+  FEATURE_CACHING: "true"
+  FEATURE_RATE_LIMITING: "true"
+  
+  # Performance tuning
+  WORKERS: "4"
+  TIMEOUT: "60"
+  KEEPALIVE: "5"
+---
+# Kafka Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: production
+data:
+  bootstrap-servers: "kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092"
+  topic-user-events: "user-events"
+  topic-analytics: "analytics-events"
+  group-id: "hyperscale-consumer-group"
+  auto-offset-reset: "earliest"
+  enable-auto-commit: "false"
+  session-timeout-ms: "30000"
+  max-poll-records: "500"
