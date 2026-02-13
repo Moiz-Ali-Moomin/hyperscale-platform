@@ -378,17 +378,6 @@ MIT License - See [LICENSE](LICENSE) file for details
 
 ---
 
-## 👤 Author
-
-**Your Name**  
-Senior DevOps Engineer | SRE | Cloud Architect
-
-- 🔗 LinkedIn: [your-profile]
-- 📧 Email: your.email@example.com
-- 🐙 GitHub: [your-github]
-
----
-
 ## ⭐ Interview-Ready
 
 This project is designed to demonstrate:
@@ -400,3 +389,4 @@ This project is designed to demonstrate:
 ✅ **Communication** of technical concepts  
 
 **Ready to discuss any component in depth during technical interviews.**
+
